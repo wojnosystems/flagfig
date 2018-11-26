@@ -1,1 +1,1 @@
-module github.com/wojnosystems/flagfig.git
+module github.com/wojnosystems/flagfig
