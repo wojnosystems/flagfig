@@ -19,6 +19,7 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+	"time"
 )
 
 func TestUsage(t *testing.T) {
@@ -63,20 +64,18 @@ func TestParse(t *testing.T) {
 	testParse(CommandLine, t)
 }
 
-
 func TestFlagSetParse(t *testing.T) {
 	testParse(NewFlagfigSet("test", flag.ContinueOnError), t)
 }
-
 
 func testParseWithEnv(f *FlagfigSet, t *testing.T) {
 	if f.Parsed() {
 		t.Error("f.Parse() = true before Parse")
 	}
 	_ = os.Setenv("ENV_STRING", "hello")
-	defer func() {_ = os.Setenv("ENV_STRING", "")}()
+	defer func() { _ = os.Setenv("ENV_STRING", "") }()
 	stringFlag := f.String("string", "0", "ENV_STRING", "string value")
-	args := make([]string,0,0)
+	args := make([]string, 0, 0)
 	if err := f.Parse(args); err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +97,7 @@ func testParseOverwriteEnv(f *FlagfigSet, t *testing.T) {
 		t.Error("f.Parse() = true before Parse")
 	}
 	_ = os.Setenv("ENV_STRING", "nothello")
-	defer func() {_ = os.Setenv("ENV_STRING", "")}()
+	defer func() { _ = os.Setenv("ENV_STRING", "") }()
 	stringFlag := f.String("string", "0", "ENV_STRING", "string value")
 	args := []string{
 		"-string=hello",
@@ -120,21 +119,40 @@ func TestParseOverwriteEnv(t *testing.T) {
 	testParseOverwriteEnv(CommandLine, t)
 }
 
-
-
 func testParseOverwriteFile(f *FlagfigSet, t *testing.T) {
 	if f.Parsed() {
 		t.Error("f.Parse() = true before Parse")
 	}
 
+	fileContent := &struct {
+		BoolConfigTrue  bool
+		BoolConfigFalse bool
+		FloatConfig     float64
+		IntConfig       int
+		InConfig        string
+		Inenv           string
+		Inflag          string
+		Int64Config     int64
+		UintConfig      uint
+		Uint64Config    uint64
+		DurationConfig  time.Duration
+	}{
+		BoolConfigTrue:  true,
+		BoolConfigFalse: false,
+		FloatConfig:     987.654321,
+		IntConfig:       1234,
+		InConfig:        "configfile",
+		Inenv:           "configfile",
+		Inflag:          "configfile",
+		Int64Config:     234,
+		UintConfig:      345,
+		Uint64Config:    456,
+		DurationConfig:  30 * time.Second,
+	}
+	marshalled, _ := json.Marshal(fileContent)
 	tmpFileName, tfremove := testTempFile(t)
 	defer tfremove()
-	fileContent := make(map[string]string)
-	fileContent["inconfig"] = "configfile"
-	fileContent["inenv"] = "configfile"
-	fileContent["inflag"] = "configfile"
-	marshalled, _ := json.Marshal(fileContent)
-	err := ioutil.WriteFile(tmpFileName, marshalled, 0600 )
+	err := ioutil.WriteFile(tmpFileName, marshalled, 0600)
 	if err != nil {
 		t.Fatalf("Unable to write temp file: %s", tmpFileName)
 	}
@@ -144,13 +162,21 @@ func testParseOverwriteFile(f *FlagfigSet, t *testing.T) {
 		t.Fatal("Unable to edit os.Setenv: ENV_STRING")
 	}
 
-	f.AddConfigFile("config-file","Config file of doom")
-	stringConfig := f.String("inconfig", "0", "", "string value")
-	stringEnv := f.String("inenv", "0", "ENV_ENV", "string value")
-	stringFlag := f.String("inflag", "0", "ENV_STRING", "string value")
+	f.AddConfigFile("config-file", "Config file of doom")
+	boolConfigTrue := f.Bool("BoolConfigTrue", false, "", "bool value true")
+	boolConfigFalse := f.Bool("BoolConfigFalse", true, "", "bool value false")
+	stringConfig := f.String("InConfig", "0", "", "string value")
+	intConfig := f.Int("IntConfig", 1, "", "int value")
+	floatConfig := f.Float64("FloatConfig", 0.5, "", "float value")
+	stringEnv := f.String("Inenv", "0", "ENV_ENV", "string value")
+	stringFlag := f.String("Inflag", "0", "ENV_STRING", "string value")
+	int64Config := f.Int64("Int64Config", 0, "", "string value")
+	uintConfig := f.Uint("UintConfig", 0, "", "string value")
+	uint64Config := f.Uint64("Uint64Config", 0, "", "string value")
+	durationConfig := f.Duration("DurationConfig", 1, "", "string value")
 	args := []string{
 		"-config-file=" + tmpFileName,
-		"-inflag=flag",
+		"-Inflag=flag",
 	}
 	if err = f.Parse(args); err != nil {
 		t.Fatal(err)
@@ -166,6 +192,30 @@ func testParseOverwriteFile(f *FlagfigSet, t *testing.T) {
 	}
 	if *stringConfig != "configfile" {
 		t.Error("stringConfig flag should be `configfile`, is ", *stringConfig)
+	}
+	if *intConfig != fileContent.IntConfig {
+		t.Error("intConfig flag should be 1234, is ", *intConfig)
+	}
+	if *floatConfig != fileContent.FloatConfig {
+		t.Error("floatConfig flag should be 987.654321, is ", *floatConfig)
+	}
+	if *boolConfigTrue != fileContent.BoolConfigTrue {
+		t.Error("boolConfigTrue flag should be true, is ", *boolConfigTrue)
+	}
+	if *boolConfigFalse != fileContent.BoolConfigFalse {
+		t.Error("boolConfigFalse flag should be false, is ", *boolConfigFalse)
+	}
+	if *int64Config != fileContent.Int64Config {
+		t.Error("int64Config flag should be ", fileContent.Int64Config, " is ", *int64Config)
+	}
+	if *uintConfig != fileContent.UintConfig {
+		t.Error("uintConfig flag should be ", fileContent.UintConfig, " is ", *uintConfig)
+	}
+	if *uint64Config != fileContent.Uint64Config {
+		t.Error("uint64Config flag should be ", fileContent.Uint64Config, " is ", *uint64Config)
+	}
+	if *durationConfig != fileContent.DurationConfig {
+		t.Error("durationConfig flag should be ", fileContent.DurationConfig, " is ", *durationConfig)
 	}
 }
 
